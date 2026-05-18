@@ -254,7 +254,20 @@ async fn get_home_data_cached(
     let cache_key = home_cache_key(&resolved_weekday);
 
     if let Ok(Some(cached)) = cache.get(&cache_key) {
-        if let Ok(parsed) = serde_json::from_str::<HomePageData>(&cached) {
+        if let Ok(mut parsed) = serde_json::from_str::<HomePageData>(&cached) {
+            // 缓存命中：若 bangumi 为空（通常是上次拉取时 bgm.tv API 临时失败导致），
+            // 单独再尝试一次，避免空数据被锁在缓存里 24 小时
+            if parsed.today_bangumi.is_empty() {
+                if let Ok(bangumi) = get_bangumi_calendar_data().await {
+                    let fresh = select_bangumi_for_weekday(&bangumi, &resolved_weekday);
+                    if !fresh.is_empty() {
+                        parsed.today_bangumi = fresh;
+                        if let Ok(serialized) = serde_json::to_string(&parsed) {
+                            let _ = cache.set(&cache_key, &serialized);
+                        }
+                    }
+                }
+            }
             return Ok(parsed);
         }
     }
