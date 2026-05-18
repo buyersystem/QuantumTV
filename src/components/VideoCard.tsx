@@ -107,6 +107,13 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
 
     // 追踪图片是否真正加载完成（只依赖 Image 的 onLoad，不依赖代理状态）
     const [imageLoaded, setImageLoaded] = useState(false);
+    const [imageFailed, setImageFailed] = useState(false);
+
+    // 当代理 URL 变化时（例如重新加载、resume），重置图片加载状态
+    useEffect(() => {
+      setImageLoaded(false);
+      setImageFailed(false);
+    }, [proxiedPosterUrl]);
 
     // 可外部修改的可控字段
     const [dynamicEpisodes, setDynamicEpisodes] = useState<number | undefined>(
@@ -606,11 +613,26 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
             }}
           >
             {/* 骨架屏 - 等待代理加载或图片加载 */}
-            {(proxyIsLoading || !imageLoaded) && (
+            {(proxyIsLoading || (!imageLoaded && !imageFailed)) && (
               <ImagePlaceholder aspectRatio='aspect-2/3' />
             )}
+            {/* 加载失败兜底 - 替换无限闪烁的骨架屏 */}
+            {imageFailed && (
+              <div className='absolute inset-0 flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 p-2'>
+                <Image
+                  src='/logo.png'
+                  alt='封面加载失败'
+                  width={48}
+                  height={48}
+                  className='opacity-60'
+                />
+                <span className='mt-2 text-[10px] sm:text-xs text-center line-clamp-2'>
+                  封面暂不可用
+                </span>
+              </div>
+            )}
             {/* 图片 - 只在代理加载完成后显示 */}
-            {!proxyIsLoading && proxiedPosterUrl && (
+            {!proxyIsLoading && proxiedPosterUrl && !imageFailed && (
               <Image
                 src={proxiedPosterUrl}
                 alt={actualTitle}
@@ -629,6 +651,9 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
                     setTimeout(() => {
                       img.src = proxiedPosterUrl;
                     }, 2000);
+                  } else {
+                    // 重试仍失败：标记为加载失败，避免骨架屏无限闪烁
+                    setImageFailed(true);
                   }
                 }}
                 style={

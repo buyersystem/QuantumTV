@@ -78,6 +78,26 @@ impl ImageCacheManager {
         }
     }
 
+    /// 获取缓存图片，忽略 TTL（即便过期也返回）。
+    /// 用于上游 URL 失效时的兜底，避免历史/推荐封面无限加载。
+    pub fn get_stale(&self, url: &str) -> Result<Option<Vec<u8>>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT data FROM image_cache WHERE url = ?")?;
+        let result = stmt.query_row(params![url], |row| Ok(row.get::<_, Vec<u8>>(0)?));
+        match result {
+            Ok(data) => {
+                drop(stmt);
+                let _ = conn.execute(
+                    "UPDATE image_cache SET last_accessed = ? WHERE url = ?",
+                    params![Self::current_timestamp(), url],
+                );
+                Ok(Some(data))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
     /// 保存图片到缓存（带元数据）
     pub fn set_with_metadata(
         &self,

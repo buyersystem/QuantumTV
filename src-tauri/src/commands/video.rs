@@ -1620,21 +1620,37 @@ pub async fn proxy_image(
         headers.insert(REFERER, HeaderValue::from_static("https://www.douban.com/"));
     }
 
-    let resp = client
-        .get(&url)
-        .headers(headers)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
+    let fetch_result = async {
+        let resp = client
+            .get(&url)
+            .headers(headers)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
 
-    if !resp.status().is_success() {
-        return Err(format!("Failed to fetch image: {}", resp.status()));
+        if !resp.status().is_success() {
+            return Err(format!("Failed to fetch image: {}", resp.status()));
+        }
+
+        resp.bytes().await.map_err(|e| e.to_string())
     }
+    .await;
 
-    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    let bytes = match fetch_result {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            // 上游 URL 已失效（例如豆瓣签名过期）。回退到过期但仍存在的缓存数据，
+            // 避免历史记录/推荐位封面陷入无限加载。
+            if let Ok(Some(stale)) = cache_manager.get_stale(&url) {
+                eprintln!("Image fetch failed ({}), serving stale cache for {}", e, url);
+                return Ok(stale);
+            }
+            return Err(e);
+        }
+    };
 
     // 3. 压缩图片
-    let compressed_bytes = tokio::task::spawn_blocking(move || {
+    let process_result = tokio::task::spawn_blocking(move || {
         let img = image::load_from_memory(&bytes).map_err(|e| format!("图片解码失败: {}", e))?;
         let (width, height) = img.dimensions();
         let processed_img = if width > 800 {
@@ -1656,7 +1672,18 @@ pub async fn proxy_image(
         Ok::<Vec<u8>, String>(buf)
     })
     .await
-    .map_err(|e| e.to_string())??;
+    .map_err(|e| e.to_string())?;
+
+    let compressed_bytes = match process_result {
+        Ok(buf) => buf,
+        Err(e) => {
+            if let Ok(Some(stale)) = cache_manager.get_stale(&url) {
+                eprintln!("Image decode failed ({}), serving stale cache for {}", e, url);
+                return Ok(stale);
+            }
+            return Err(e);
+        }
+    };
 
     // 4. 保存到 SQLite 缓存（带元数据）
     if let Err(e) = cache_manager.set_with_metadata(
