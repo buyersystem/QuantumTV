@@ -2449,67 +2449,85 @@ function PlayPageClient() {
         </div>
         {/* 第二行：播放器和选集 */}
         <div className='space-y-2.5 min-[834px]:space-y-4'>
-          {/* 折叠控制和跳过设置 - 仅在 xl 及以上屏幕显示 */}
-          <div className='hidden xl:flex items-center justify-between'>
-            <button
-              onClick={() =>
-                setIsEpisodeSelectorCollapsed(!isEpisodeSelectorCollapsed)
-              }
-              className='tap-target group relative flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-white/80 hover:bg-white dark:bg-gray-800/80 dark:hover:bg-gray-800 backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50 shadow-sm hover:shadow-md transition-all duration-200'
-              title={
-                isEpisodeSelectorCollapsed ? '显示选集面板' : '隐藏选集面板'
-              }
-            >
-              <svg
-                className={`w-3.5 h-3.5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${
-                  isEpisodeSelectorCollapsed ? 'rotate-180' : 'rotate-0'
-                }`}
-                fill='none'
-                stroke='currentColor'
-                viewBox='0 0 24 24'
-              >
-                <path
-                  strokeLinecap='round'
-                  strokeLinejoin='round'
-                  strokeWidth='2'
-                  d='M9 5l7 7-7 7'
-                />
-              </svg>
-              <span className='text-xs font-medium text-gray-600 dark:text-gray-300'>
-                {isEpisodeSelectorCollapsed ? '显示' : '隐藏'}
-              </span>
-
-              {/* 精致的状态指示点 */}
-              <div
-                className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full transition-all duration-200 ${
-                  isEpisodeSelectorCollapsed
-                    ? 'bg-orange-400 animate-pulse'
-                    : 'bg-green-400'
-                }`}
-              ></div>
-            </button>
-          </div>
-
           <div
-            className={`grid gap-3 transition-all duration-300 ease-in-out min-[834px]:gap-5 xl:h-[70vh] xl:grid-rows-[minmax(0,1fr)] min-[1440px]:h-[78vh] 2xl:h-[80vh] ${
-              isEpisodeSelectorCollapsed
-                ? 'grid-cols-1'
-                : 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_22rem] min-[1440px]:grid-cols-[minmax(0,1fr)_24rem] 2xl:grid-cols-[minmax(0,1fr)_25rem]'
-            }`}
+            className={cn(
+              'grid grid-cols-1 gap-3 transition-all duration-300 ease-in-out min-[834px]:gap-5',
+              'lg:h-[68vh] lg:grid-rows-[minmax(0,1fr)] xl:h-[72vh] min-[1440px]:h-[78vh] 2xl:h-[80vh]',
+              !isEpisodeSelectorCollapsed &&
+                'lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_25rem]',
+            )}
           >
-            {/* 播放器 */}
-            <div className='min-h-0 h-full transition-all duration-300 ease-in-out rounded-xl border border-white/0 dark:border-white/30'>
-              <div className='group/player relative -mx-3 h-[18.5rem] min-h-[18.5rem] w-[calc(100%+1.5rem)] overflow-hidden rounded-[1.25rem] max-[375px]:-mx-2.5 max-[375px]:h-[16.5rem] max-[375px]:min-h-[16.5rem] max-[375px]:w-[calc(100%+1.25rem)] sm:mx-0 sm:h-auto sm:min-h-[17rem] sm:w-full sm:rounded-[1.15rem] md:min-h-[20rem] min-[834px]:min-h-[24rem] xl:h-full xl:min-h-[32rem] min-[1440px]:min-h-[38rem]'>
+            {/* 播放器壳：mobile/tablet 宽度驱动 16:9，lg+ 高度驱动 16:9 居中 */}
+            <div className='min-h-0 h-full transition-all duration-300 ease-in-out lg:flex lg:items-center lg:justify-center'>
+              <div
+                className={cn(
+                  'group/player relative overflow-hidden bg-black shadow-lg',
+                  'rounded-[1.25rem] sm:rounded-[1.15rem]',
+                  // mobile/tablet portrait：贴边 + 宽度驱动
+                  '-mx-3 w-[calc(100%+1.5rem)] max-[375px]:-mx-2.5 max-[375px]:w-[calc(100%+1.25rem)] sm:mx-0 sm:w-full',
+                  // 始终保持 16:9
+                  'aspect-video',
+                  // lg+ 改为高度驱动，宽度由比例算出
+                  'lg:mx-0 lg:h-full lg:w-auto lg:max-w-full lg:max-h-full',
+                )}
+              >
                 <div
                   ref={playerContainerRef}
-                  className='quantum-plyr-shell bg-black w-full h-full rounded-[1.25rem] overflow-hidden shadow-lg sm:rounded-[1.15rem]'
-                ></div>
+                  className='quantum-plyr-shell absolute inset-0'
+                />
+
+                {/* 悬浮折叠按钮（仅 lg+，hover 显形） */}
+                <button
+                  type='button'
+                  onClick={() =>
+                    setIsEpisodeSelectorCollapsed(!isEpisodeSelectorCollapsed)
+                  }
+                  title={
+                    isEpisodeSelectorCollapsed ? '显示选集面板' : '隐藏选集面板'
+                  }
+                  aria-label={
+                    isEpisodeSelectorCollapsed ? '显示选集面板' : '隐藏选集面板'
+                  }
+                  className={cn(
+                    'absolute right-3 top-3 z-30 hidden items-center gap-1.5 rounded-full bg-black/55 px-3 py-1.5 text-xs font-medium text-white opacity-0 ring-1 ring-white/20 backdrop-blur-md transition lg:flex',
+                    'group-hover/player:opacity-100 focus-visible:opacity-100',
+                  )}
+                >
+                  <svg
+                    className={cn(
+                      'h-3.5 w-3.5 transition-transform',
+                      isEpisodeSelectorCollapsed && 'rotate-180',
+                    )}
+                    fill='none'
+                    stroke='currentColor'
+                    viewBox='0 0 24 24'
+                    aria-hidden='true'
+                  >
+                    <path
+                      strokeLinecap='round'
+                      strokeLinejoin='round'
+                      strokeWidth='2'
+                      d='M9 5l7 7-7 7'
+                    />
+                  </svg>
+                  <span>
+                    {isEpisodeSelectorCollapsed ? '显示' : '隐藏'}
+                  </span>
+                  <span
+                    className={cn(
+                      'h-2 w-2 rounded-full',
+                      isEpisodeSelectorCollapsed
+                        ? 'animate-pulse bg-orange-400'
+                        : 'bg-green-400',
+                    )}
+                    aria-hidden='true'
+                  />
+                </button>
 
                 {/* 加载中的提示 */}
                 {isVideoLoading && (
                   <div className='absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm rounded-[1.25rem] sm:rounded-[1.15rem]'>
                     <div className='flex flex-col items-center gap-3'>
-                      {/* <div className='w-10 h-10 border-4 border-green-500 border-t-transparent rounded-full animate-spin' /> */}
                       <span className='text-white/80 text-sm'>
                         {videoLoadingStage === 'sourceChanging'
                           ? '切换播放源...'
