@@ -1,4 +1,4 @@
-﻿/* eslint-disable no-console */
+/* eslint-disable no-console */
 'use client';
 
 import { invoke } from '@tauri-apps/api/core';
@@ -21,17 +21,7 @@ export interface UseSourceFilterReturn {
   error: string | null;
   setCurrentSource: (sourceKey: string) => void;
   refreshSources: () => Promise<void>;
-  getFilteredCategories: (
-    contentType: 'movie' | 'tv' | 'anime' | 'show',
-  ) => SourceCategory[];
 }
-
-const CONTENT_TYPE_KEYWORDS: Record<string, string[]> = {
-  movie: ['电影', '影片', '院线', '4k', '蓝光'],
-  tv: ['电视剧', '剧集', '美剧', '韩剧', '日剧', '港剧'],
-  anime: ['动漫', '动画', '番剧', '漫画'],
-  show: ['综艺', '真人秀', '脱口秀', '晚会', '纪录片'],
-};
 
 export function useSourceFilter(): UseSourceFilterReturn {
   const [sources, setSources] = useState<ApiSite[]>([]);
@@ -136,36 +126,6 @@ export function useSourceFilter(): UseSourceFilterReturn {
     [fetchSourceCategories],
   );
 
-  const getFilteredCategories = useCallback(
-    (contentType: 'movie' | 'tv' | 'anime' | 'show'): SourceCategory[] => {
-      if (sourceCategories.length === 0) {
-        return [];
-      }
-
-      const keywords = CONTENT_TYPE_KEYWORDS[contentType] || [];
-      let filtered = sourceCategories.filter((cat) => {
-        const name = cat.type_name.toLowerCase();
-        return keywords.some((keyword) => name.includes(keyword.toLowerCase()));
-      });
-
-      if (filtered.length === 0) {
-        filtered = sourceCategories.filter((cat) => {
-          const name = cat.type_name;
-          return (
-            name.includes('影') || name.includes('剧') || name.includes('漫')
-          );
-        });
-      }
-
-      if (filtered.length === 0) {
-        return sourceCategories.slice(0, 15);
-      }
-
-      return filtered;
-    },
-    [sourceCategories],
-  );
-
   const refreshSources = useCallback(async () => {
     await fetchSources();
   }, [fetchSources]);
@@ -183,7 +143,6 @@ export function useSourceFilter(): UseSourceFilterReturn {
     error,
     setCurrentSource,
     refreshSources,
-    getFilteredCategories,
   };
 }
 

@@ -97,10 +97,10 @@ function DoubanPageClient() {
   const {
     sources,
     currentSource,
+    sourceCategories,
     isLoadingSources,
     isLoadingCategories,
     setCurrentSource,
-    getFilteredCategories,
   } = useSourceFilter();
 
   // 内容池同步
@@ -834,14 +834,12 @@ function DoubanPageClient() {
                 // 数据源相关 props
                 sources={sources}
                 currentSource={currentSource}
-                // 【核心修复】使用 filteredSourceCategories state 而非 getFilteredCategories
-                // 这样确保渲染的分类与 handleSourceChange 处理的分类一致
+                // 特定源模式下用 handleSourceChange 维护的本地过滤列表（保证渲染与请求一致）；
+                // 聚合模式下 sourceCategories 天然为空数组
                 sourceCategories={
                   currentSource !== 'auto'
                     ? filteredSourceCategories
-                    : getFilteredCategories(
-                        type as 'movie' | 'tv' | 'anime' | 'show',
-                      )
+                    : sourceCategories
                 }
                 isLoadingSources={isLoadingSources}
                 isLoadingCategories={isLoadingCategories}
