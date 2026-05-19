@@ -2575,7 +2575,7 @@ function PlayPageClient() {
         <section className='grid grid-cols-1 gap-4 min-[834px]:gap-5 lg:grid-cols-5 lg:gap-6 min-[1440px]:gap-8'>
           {/* 封面：sm 起以小卡显示，lg+ 回到左侧 2/5 大卡 */}
           <div className='hidden sm:block lg:order-first lg:col-span-2'>
-            <div className='relative mx-auto aspect-2/3 max-w-[12rem] overflow-hidden rounded-xl bg-gray-300 dark:bg-gray-700 sm:max-w-[16rem] lg:mx-0 lg:max-w-none xl:mr-6'>
+            <div className='relative mx-auto aspect-2/3 max-w-[12rem] overflow-hidden rounded-xl bg-gray-300 dark:bg-gray-700 sm:max-w-[16rem] lg:mx-0 lg:max-w-none'>
               {videoCover ? (
                 <img
                   src={proxiedCoverUrl}
