@@ -2543,13 +2543,13 @@ function PlayPageClient() {
               </div>
             </div>
 
-            {/* 选集和换源 - 在移动端始终显示，在 lg 及以上可折叠 */}
+            {/* 选集和换源 - mobile/tablet 固定高度，lg+ 跟随网格高度 */}
             <div
-              className={`min-h-[23rem] max-h-[27rem] max-[375px]:min-h-[21rem] max-[375px]:max-h-[25rem] sm:min-h-[22rem] sm:max-h-[25rem] md:min-h-[24rem] md:max-h-[27rem] min-[834px]:min-h-[27rem] min-[834px]:max-h-[32rem] xl:h-full xl:min-h-0 xl:max-h-full overflow-hidden transition-all duration-300 ease-in-out ${
-                isEpisodeSelectorCollapsed
-                  ? 'xl:hidden xl:opacity-0 xl:scale-95'
-                  : 'xl:opacity-100 xl:scale-100'
-              }`}
+              className={cn(
+                'min-h-0 overflow-hidden transition-all duration-300 ease-in-out',
+                'h-[28rem] max-[375px]:h-[24rem] sm:h-[26rem] min-[834px]:h-[30rem] lg:h-full',
+                isEpisodeSelectorCollapsed && 'lg:hidden',
+              )}
             >
               <EpisodeSelector
                 totalEpisodes={totalEpisodes}
