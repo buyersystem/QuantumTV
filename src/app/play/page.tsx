@@ -2489,8 +2489,10 @@ function PlayPageClient() {
                     isEpisodeSelectorCollapsed ? '显示选集面板' : '隐藏选集面板'
                   }
                   className={cn(
-                    'absolute right-3 top-3 z-30 hidden items-center gap-1.5 rounded-full bg-black/55 px-3 py-1.5 text-xs font-medium text-white opacity-0 ring-1 ring-white/20 backdrop-blur-md transition lg:flex',
-                    'group-hover/player:opacity-100 focus-visible:opacity-100',
+                    'absolute right-3 top-3 z-30 hidden items-center gap-1.5 rounded-full bg-black/55 px-3 py-1.5 text-xs font-medium text-white opacity-0 pointer-events-none ring-1 ring-white/20 backdrop-blur-md transition lg:flex',
+                    'group-hover/player:opacity-100 group-hover/player:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto',
+                    // 触屏设备无 hover：始终可见
+                    '[@media(pointer:coarse)]:opacity-100 [@media(pointer:coarse)]:pointer-events-auto',
                   )}
                 >
                   <svg
@@ -2526,7 +2528,7 @@ function PlayPageClient() {
 
                 {/* 加载中的提示 */}
                 {isVideoLoading && (
-                  <div className='absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm rounded-[1.25rem] sm:rounded-[1.15rem]'>
+                  <div className='absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm'>
                     <div className='flex flex-col items-center gap-3'>
                       <span className='text-white/80 text-sm'>
                         {videoLoadingStage === 'sourceChanging'
