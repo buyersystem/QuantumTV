@@ -65,3 +65,4 @@ public/manifest.json
 *.p12
 key.properties
 **/*.jks
+/docs
