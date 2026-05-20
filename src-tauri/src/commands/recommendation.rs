@@ -409,12 +409,16 @@ impl RecommendationEngine {
             // 基于热门标题推荐（但排除用户已看过的）
             for (title, count) in global_stats.popular_titles.iter().take(5) {
                 if !watched_titles.contains(title) {
+                    // 仅在能反查到真实封面时才推送,避免前端拿到空 URL 卡死。
+                    let Some((cover, year)) = lookup_cover_and_year(db, title) else {
+                        continue;
+                    };
                     let score = (*count as f64 / 10.0).min(8.0);
                     recommendations.push(RecommendationItem {
                         title: title.clone(),
                         source_name: "热门推荐".to_string(),
-                        year: String::new(),
-                        cover: String::new(),
+                        year,
+                        cover,
                         score,
                         reason: RecommendationReason::Popular,
                     });
@@ -1448,6 +1452,9 @@ impl RecommendationEngine {
         // 去重
         recommendations = self.deduplicate_recommendations(recommendations);
 
+        // 安全网:任何分支返回的空封面项一律过滤掉,避免前端骨架屏永远转动。
+        recommendations.retain(|item| !item.cover.trim().is_empty());
+
         // 按分数排序
         recommendations.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
 
@@ -1497,6 +1504,54 @@ impl RecommendationEngine {
         rec_cache.clear();
     }
 }
+
+/// 按 title 在 content_pool / image_cache 里查封面和年份,
+/// 优先使用 content_pool(更结构化),其次 image_cache(至少有 URL)。
+fn lookup_cover_and_year(db: &Db, title: &str) -> Option<(String, String)> {
+    db.with_conn(|conn| {
+        // 1) content_pool 优先
+        let pool: Option<(String, String)> = conn
+            .query_row(
+                "SELECT cover, year FROM content_pool
+                 WHERE title = ? AND cover IS NOT NULL AND cover != ''
+                 LIMIT 1",
+                rusqlite::params![title],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0).unwrap_or_default(),
+                        row.get::<_, String>(1).unwrap_or_default(),
+                    ))
+                },
+            )
+            .ok();
+
+        if let Some(entry) = pool.filter(|(cover, _)| !cover.is_empty()) {
+            return Ok(Some(entry));
+        }
+
+        // 2) image_cache 兜底
+        let cache: Option<(String, String)> = conn
+            .query_row(
+                "SELECT url, year FROM image_cache
+                 WHERE title = ? AND url IS NOT NULL AND url != ''
+                 ORDER BY access_count DESC, last_accessed DESC
+                 LIMIT 1",
+                rusqlite::params![title],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0).unwrap_or_default(),
+                        row.get::<_, String>(1).unwrap_or_default(),
+                    ))
+                },
+            )
+            .ok();
+
+        Ok(cache.filter(|(cover, _)| !cover.is_empty()))
+    })
+    .ok()
+    .flatten()
+}
+
 
 // ========== Tauri 命令 ==========
 

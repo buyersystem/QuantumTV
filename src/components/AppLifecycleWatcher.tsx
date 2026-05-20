@@ -1,18 +1,37 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { resetPreloadState } from '@/lib/imagePreloader';
 import { clearPendingRequests } from '@/hooks/useProxyImage';
 
+// 只有在隐藏超过该阈值后再次可见,才视为真正的"恢复",避免桌面端
+// 短暂最小化/被其他窗口遮挡时触发 app-resumed,导致全站图片重新加载并卡住。
+const RESUME_THRESHOLD_MS = 30_000;
+
 export function AppLifecycleWatcher() {
+  const hiddenAtRef = useRef<number | null>(null);
+
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        clearPendingRequests();
-        resetPreloadState();
-        window.dispatchEvent(new CustomEvent('app-resumed'));
+      if (document.visibilityState === 'hidden') {
+        hiddenAtRef.current = Date.now();
+        return;
       }
+
+      if (document.visibilityState !== 'visible') return;
+
+      const hiddenAt = hiddenAtRef.current;
+      hiddenAtRef.current = null;
+
+      // 仅在长时间隐藏后才认为是真正的恢复(主要针对 Android WebView 场景)
+      if (hiddenAt === null || Date.now() - hiddenAt < RESUME_THRESHOLD_MS) {
+        return;
+      }
+
+      clearPendingRequests();
+      resetPreloadState();
+      window.dispatchEvent(new CustomEvent('app-resumed'));
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
