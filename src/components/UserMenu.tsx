@@ -86,9 +86,9 @@ export const UserMenu: React.FC = () => {
   const [enableOptimization, setEnableOptimization] = useState(true);
   const [fluidSearch, setFluidSearch] = useState(true);
   const [filterAdultContent, setFilterAdultContent] = useState(true);
-  const [playerBufferMode, setPlayerBufferMode] = useState<
-    'standard' | 'enhanced' | 'max'
-  >('standard');
+  const [, setPlayerBufferMode] = useState<'standard' | 'enhanced' | 'max'>(
+    'standard',
+  );
   const [doubanDataSource, setDoubanDataSource] = useState(
     'cmliussss-cdn-tencent',
   );

@@ -17,7 +17,9 @@ use tauri::{Emitter, Manager};
 
 /// Spawn all background interval tasks. Call once from `.setup()`.
 pub fn start_background_tasks(app: tauri::AppHandle) {
-    eprintln!("[调度器] 已启动: 配置订阅(24h), 图像缓存(24h), 页面缓存(24h), 推荐预热(12h)");
+    eprintln!(
+        "[调度器] 已启动: 配置订阅(24h), 图像缓存(7*24h), 页面缓存(3*24h), 推荐预热(24h)"
+    );
 
     spawn_subscription_auto_update(app.clone());
     spawn_image_cache_cleanup(app.clone());
@@ -117,10 +119,10 @@ async fn run_subscription_update(app: &tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// 任务 2 — 图像缓存清理（每 24 小时）
+/// 任务 2 — 图像缓存清理（每 7*24 小时）
 fn spawn_image_cache_cleanup(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(24 * 3600));
+        let mut interval = tokio::time::interval(Duration::from_secs(24 * 3600 * 7));
         interval.tick().await;
 
         loop {
@@ -136,10 +138,10 @@ fn spawn_image_cache_cleanup(app: tauri::AppHandle) {
     });
 }
 
-/// 任务 3 — 页面缓存清理（每 24 小时）
+/// 任务 3 — 页面缓存清理（每 3*24 小时）
 fn spawn_page_cache_cleanup(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(24 * 3600));
+        let mut interval = tokio::time::interval(Duration::from_secs(24 * 3600 * 3));
         interval.tick().await;
 
         loop {
@@ -155,10 +157,10 @@ fn spawn_page_cache_cleanup(app: tauri::AppHandle) {
     });
 }
 
-/// 任务 4 — 推荐预热（每 12 小时）
+/// 任务 4 — 推荐预热（每 24 小时）
 fn spawn_recommendation_preheat(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(12 * 3600));
+        let mut interval = tokio::time::interval(Duration::from_secs(24 * 3600));
         interval.tick().await;
 
         loop {
