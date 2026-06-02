@@ -55,6 +55,10 @@
 - 📺 **TVBox 兼容** —— 内置 `/api/tvbox` 端点,直接当 TVBox 后端用
 - 🛡️ **CMS 全量代理** —— 桌面端原生网络栈,彻底告别 CORS 和 Mixed Content
 
+<div align="center">
+  <img src="public/photo.jpg" alt="rust" width="100%" max-width="150" height="auto">
+</div>
+
 ## 🚀 快速开始
 
 ### 普通用户:下载预编译版本
@@ -79,8 +83,8 @@ git clone https://github.com/Geon97/QuantumTV.git
 cd QuantumTV
 
 npm install
-npm run tauri dev        # 开发模式
-npm run tauri build      # 打生产包
+cargo tauri dev        # 开发模式
+cargo tauri build      # 打生产包
 ```
 
 构建 Android 需要额外配置 Android SDK / NDK,详见 [Tauri 移动端文档](https://v2.tauri.app/start/prerequisites/#android)。
@@ -148,13 +152,13 @@ services:
 
 ## 🛠 技术栈
 
-| 分类     | 主要依赖                                                                                                               |
-| -------- | ---------------------------------------------------------------------------------------------------------------------- |
-| 桌面壳   | [Tauri 2](https://tauri.app/)                                                                                          |
-| 后端语言 | [Rust 1.90](https://www.rust-lang.org/) + [Axum](https://github.com/tokio-rs/axum) + [SQLite](https://www.sqlite.org/) |
-| 前端框架 | [Next.js 16](https://nextjs.org/) + [React 19](https://react.dev/) + [TypeScript 5](https://www.typescriptlang.org/)   |
-| 样式     | [Tailwind CSS 4](https://tailwindcss.com/)                                                                             |
-| 播放器   | [Plyr](https://github.com/sampotts/plyr) + [HLS.js](https://github.com/video-dev/hls.js)                               |
+| 分类　　 | 主要依赖　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　  |
+| -------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 桌面壳　 | [Tauri 2](https://tauri.app/)　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
+| 后端语言 | [Rust 1.90](https://www.rust-lang.org/) + [Axum](https://github.com/tokio-rs/axum) + [SQLite](https://www.sqlite.org/)  |
+| 前端框架 | [Next.js 16](https://nextjs.org/) + [React 19](https://react.dev/) + [TypeScript 5](https://www.typescriptlang.org/)　  |
+| 样式　　 | [Tailwind CSS 4](https://tailwindcss.com/)　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　  |
+| 播放器　 | [Plyr](https://github.com/sampotts/plyr) + [HLS.js](https://github.com/video-dev/hls.js)　　　　　　　　　　　　　　　  |
 
 ## 🏛️ 架构一览
 
