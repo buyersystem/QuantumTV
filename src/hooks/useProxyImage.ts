@@ -62,7 +62,11 @@ export function useProxyImage(originalUrl: string, metadata?: ImageMetadata): {
   const blobUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const handleResume = () => setResumeKey((k) => k + 1);
+    const handleResume = () => {
+      // 清理失效的请求缓存和预加载状态
+      clearPendingRequests();
+      setResumeKey((k) => k + 1);
+    };
     window.addEventListener('app-resumed', handleResume);
     return () => window.removeEventListener('app-resumed', handleResume);
   }, []);
