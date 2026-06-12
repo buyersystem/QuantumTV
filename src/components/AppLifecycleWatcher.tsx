@@ -7,6 +7,7 @@ import { clearPendingRequests } from '@/hooks/useProxyImage';
 
 // 只有在隐藏超过该阈值后再次可见,才视为真正的"恢复",避免桌面端
 // 短暂最小化/被其他窗口遮挡时触发 app-resumed,导致全站图片重新加载并卡住。
+// 移动端降低阈值以确保快速切换时也能清理缓存
 const RESUME_THRESHOLD_MS = 5_000; // 5秒，移动端更敏感
 
 export function AppLifecycleWatcher() {
@@ -25,9 +26,8 @@ export function AppLifecycleWatcher() {
       hiddenAtRef.current = null;
 
       // 仅在长时间隐藏后才认为是真正的恢复(主要针对 Android WebView 场景)
-      // 但即使未达到阈值，也要清理缓存，由 useProxyImage 中的 clearPendingRequests 处理
-      const shouldClearCache =
-        hiddenAt !== null && Date.now() - hiddenAt >= RESUME_THRESHOLD_MS;
+      const shouldClearCache = hiddenAt !== null && Date.now() - hiddenAt >= RESUME_THRESHOLD_MS;
+
       if (shouldClearCache) {
         clearPendingRequests();
         resetPreloadState();

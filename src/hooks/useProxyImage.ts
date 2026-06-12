@@ -16,7 +16,10 @@ export function clearPendingRequests(): void {
   pendingRequests.clear();
 }
 
-async function getImageData(originalUrl: string, metadata?: ImageMetadata): Promise<Uint8Array> {
+async function getImageData(
+  originalUrl: string,
+  metadata?: ImageMetadata,
+): Promise<Uint8Array> {
   // 检查是否有正在进行的请求
   const pending = pendingRequests.get(originalUrl);
   if (pending) {
@@ -48,9 +51,13 @@ async function getImageData(originalUrl: string, metadata?: ImageMetadata): Prom
   return request;
 }
 
-const PLACEHOLDER = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"%3E%3C/svg%3E';
+const PLACEHOLDER =
+  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"%3E%3C/svg%3E';
 
-export function useProxyImage(originalUrl: string, metadata?: ImageMetadata): {
+export function useProxyImage(
+  originalUrl: string,
+  metadata?: ImageMetadata,
+): {
   url: string;
   isLoading: boolean;
   error: Error | null;
@@ -80,8 +87,17 @@ export function useProxyImage(originalUrl: string, metadata?: ImageMetadata): {
     }
 
     // 判断是否需要代理
+    // 1. doubanio.com 总是需要代理（防盗链）
+    // 2. Tauri 环境中（tauri:// 协议），所有外部图片都需要代理
+    // 3. https 页面加载 http 图片需要代理（混合内容）
+    const isTauriProtocol =
+      typeof window !== 'undefined' &&
+      (window.location.protocol === 'tauri:' ||
+        window.location.protocol.startsWith('tauri'));
+
     const needsProxy =
       originalUrl.includes('doubanio.com') ||
+      isTauriProtocol ||
       (typeof window !== 'undefined' &&
         window.location.protocol === 'https:' &&
         originalUrl.startsWith('http://'));
@@ -103,16 +119,43 @@ export function useProxyImage(originalUrl: string, metadata?: ImageMetadata): {
       .then((imageData) => {
         if (cancelled) return;
 
-        // 每次挂载都创建新的 blob URL，避免 Android WebView 二次进入后复用失效 URL
-        const blob = new Blob([imageData] as any, { type: 'image/jpeg' });
-        const newBlobUrl = URL.createObjectURL(blob);
-        blobUrlRef.current = newBlobUrl;
-        setUrl(newBlobUrl);
-        setIsLoading(false);
+        // Android WebView 某些版本对 Blob URL 支持有问题，使用 data URL
+        // 检测是否为移动端浏览器
+        const isMobile =
+          typeof window !== 'undefined' &&
+          /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+            navigator.userAgent,
+          );
+
+        if (isMobile && imageData.length < 500_000) {
+          // 使用 data URL（移动端小图片）
+          try {
+            const base64 = btoa(String.fromCharCode(...Array.from(imageData)));
+            const dataUrl = `data:image/jpeg;base64,${base64}`;
+            setUrl(dataUrl);
+            setIsLoading(false);
+          } catch (err) {
+            console.error('[useProxyImage] Failed to create data URL:', err);
+            // Fallback to blob URL
+            const blob = new Blob([imageData as any], { type: 'image/jpeg' });
+            const blobUrl = URL.createObjectURL(blob);
+            blobUrlRef.current = blobUrl;
+            setUrl(blobUrl);
+            setIsLoading(false);
+          }
+        } else {
+          // 使用 Blob URL（桌面端或大图片）
+          const blob = new Blob([imageData as any], { type: 'image/jpeg' });
+          const newBlobUrl = URL.createObjectURL(blob);
+          blobUrlRef.current = newBlobUrl;
+          setUrl(newBlobUrl);
+          setIsLoading(false);
+        }
       })
       .catch((err) => {
         if (cancelled) return;
 
+        console.error('[useProxyImage] Failed to load image:', err);
         setError(err);
         setIsLoading(false);
         // Fallback 到原始 URL
