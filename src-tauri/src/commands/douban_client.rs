@@ -2004,10 +2004,12 @@ mod tests {
     use super::*;
     use crate::db::page_cache::PageCacheManager;
     use rusqlite::Connection;
+    use std::sync::{Arc, Mutex};
 
     fn setup_page_cache() -> PageCacheManager {
         let conn = Connection::open_in_memory().expect("open cache db");
-        let cache = PageCacheManager::new(conn);
+        let shared_conn = Arc::new(Mutex::new(conn));
+        let cache = PageCacheManager::from_shared(shared_conn);
         cache.init_table().expect("init cache table");
         cache
     }
