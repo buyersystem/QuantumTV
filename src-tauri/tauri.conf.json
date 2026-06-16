@@ -15,7 +15,8 @@
       {
         "title": "QuantumTV 免费开源",
         "width": 1000,
-        "height": 800
+        "height": 800,
+        "useHttpsScheme": true
       }
     ],
     "security": {

@@ -1771,25 +1771,40 @@ pub async fn serve_cached_image<R: tauri::Runtime>(
     }
 
     if url.is_empty() {
+        eprintln!("[serve_cached_image] ERROR: missing url param");
         return image_error_response(StatusCode::BAD_REQUEST, "missing url param");
     }
+
+    eprintln!("[serve_cached_image] parsed url: {}", &url[..url.len().min(80)]);
 
     // 校验并取出配置（克隆出 Value，避免 State 借用跨越 await）
     let config = match app.try_state::<StorageManager>() {
         Some(storage) => match storage.get_data() {
             Ok(d) => d.config,
-            Err(e) => return image_error_response(StatusCode::INTERNAL_SERVER_ERROR, &e),
+            Err(e) => {
+                eprintln!("[serve_cached_image] ERROR: get_data failed: {}", e);
+                return image_error_response(StatusCode::INTERNAL_SERVER_ERROR, &e);
+            }
         },
-        None => return image_error_response(StatusCode::SERVICE_UNAVAILABLE, "storage not ready"),
+        None => {
+            eprintln!("[serve_cached_image] ERROR: storage not ready");
+            return image_error_response(StatusCode::SERVICE_UNAVAILABLE, "storage not ready");
+        }
     };
     if let Err(e) = validate_remote_url_against_config(&url, &config) {
+        eprintln!("[serve_cached_image] ERROR: validation failed: {}", e);
         return image_error_response(StatusCode::FORBIDDEN, &e);
     }
+
+    eprintln!("[serve_cached_image] validation passed, fetching...");
 
     // ImageCacheManager 是 Arc 包裹的，clone 后由 future 独立持有
     let cache_manager = match app.try_state::<crate::db::image_cache::ImageCacheManager>() {
         Some(cm) => cm.inner().clone(),
-        None => return image_error_response(StatusCode::SERVICE_UNAVAILABLE, "cache not ready"),
+        None => {
+            eprintln!("[serve_cached_image] ERROR: cache not ready");
+            return image_error_response(StatusCode::SERVICE_UNAVAILABLE, "cache not ready");
+        }
     };
 
     match fetch_and_cache_image(
@@ -1803,14 +1818,20 @@ pub async fn serve_cached_image<R: tauri::Runtime>(
     )
     .await
     {
-        Ok(bytes) => tauri::http::Response::builder()
-            .status(StatusCode::OK)
-            .header(tauri::http::header::CONTENT_TYPE, "image/jpeg")
-            .header(tauri::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-            .header(tauri::http::header::CACHE_CONTROL, "public, max-age=604800")
-            .body(bytes)
-            .unwrap_or_else(|_| tauri::http::Response::new(Vec::new())),
-        Err(e) => image_error_response(StatusCode::BAD_GATEWAY, &e),
+        Ok(bytes) => {
+            eprintln!("[serve_cached_image] SUCCESS: {} bytes", bytes.len());
+            tauri::http::Response::builder()
+                .status(StatusCode::OK)
+                .header(tauri::http::header::CONTENT_TYPE, "image/jpeg")
+                .header(tauri::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+                .header(tauri::http::header::CACHE_CONTROL, "public, max-age=604800")
+                .body(bytes)
+                .unwrap_or_else(|_| tauri::http::Response::new(Vec::new()))
+        }
+        Err(e) => {
+            eprintln!("[serve_cached_image] ERROR: fetch failed: {}", e);
+            image_error_response(StatusCode::BAD_GATEWAY, &e)
+        }
     }
 }
 

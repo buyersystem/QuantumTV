@@ -648,6 +648,9 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
                 loading='lazy'
                 onLoad={() => setImageLoaded(true)}
                 onError={(e) => {
+                  // 调试用：记录加载失败的 URL
+                  console.error('[VideoCard] Image load failed:', proxiedPosterUrl.substring(0, 100));
+
                   // 图片加载失败时的重试机制
                   const img = e.target as HTMLImageElement;
                   if (!img.dataset.retried) {

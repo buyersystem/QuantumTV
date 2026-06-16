@@ -36,9 +36,11 @@ function needsProxy(originalUrl: string): boolean {
 }
 
 // 构造自定义协议 URL。
-// Android/Windows 上自定义协议的格式是 http://<scheme>.localhost/，
-// macOS/Linux/iOS 是 <scheme>://localhost/。
-// 为了统一，直接硬编码 Android/Windows 的格式（这是 Tauri 2.x 在这些平台的默认行为）。
+// Tauri 2.x 自定义协议在不同平台的默认格式：
+// - Android/Windows: https://<scheme>.localhost（启用 useHttpsScheme 后）
+// - macOS/Linux/iOS: <scheme>://localhost
+//
+// 检测方式：看页面本身的 protocol，Android 是 https://tauri.localhost（启用后）
 function buildProxyUrl(originalUrl: string, metadata?: ImageMetadata): string {
   const params = new URLSearchParams();
   params.set('url', originalUrl);
@@ -48,23 +50,22 @@ function buildProxyUrl(originalUrl: string, metadata?: ImageMetadata): string {
   if (metadata?.category) params.set('category', metadata.category);
   if (metadata?.rating != null) params.set('rating', String(metadata.rating));
 
-  // 在 Android/Windows 上是 http://imgcache.localhost，macOS/Linux/iOS 上是 imgcache://localhost
-  // 用 UA 或 platform 检测太脆弱；参考 convertFileSrc 的实现，更可靠的方式是检查
-  // window.location.protocol：Android 下页面本身是 http://tauri.localhost，
-  // 桌面端 macOS/Linux 是 tauri://localhost（协议名不带 http）
   if (typeof window !== 'undefined') {
     const pageProtocol = window.location.protocol;
-    if (pageProtocol === 'http:' || pageProtocol === 'https:') {
-      // Android / Windows: http://imgcache.localhost
+    // Android/Windows 启用 useHttpsScheme 后页面是 https://tauri.localhost
+    if (pageProtocol === 'https:') {
+      return `https://imgcache.localhost/?${params.toString()}`;
+    } else if (pageProtocol === 'http:') {
+      // 旧版或未启用 https 的 Android/Windows
       return `http://imgcache.localhost/?${params.toString()}`;
     } else {
-      // macOS / Linux / iOS: imgcache://localhost
+      // macOS/Linux/iOS: tauri://localhost 页面，自定义协议用 imgcache://
       return `imgcache://localhost/?${params.toString()}`;
     }
   }
 
-  // SSR fallback（实际不会走到，因为 needsProxy 在 SSR 返回 false）
-  return `http://imgcache.localhost/?${params.toString()}`;
+  // SSR fallback
+  return `https://imgcache.localhost/?${params.toString()}`;
 }
 
 /**
