@@ -1,4 +1,3 @@
-import { convertFileSrc } from '@tauri-apps/api/core';
 import { useMemo } from 'react';
 
 export interface ImageMetadata {
@@ -36,8 +35,10 @@ function needsProxy(originalUrl: string): boolean {
   return false;
 }
 
-// 构造自定义协议 URL。convertFileSrc 负责处理各平台 scheme 差异：
-// Android/Windows -> http://imgcache.localhost/...；macOS/Linux/iOS -> imgcache://localhost/...
+// 构造自定义协议 URL。
+// Android/Windows 上自定义协议的格式是 http://<scheme>.localhost/，
+// macOS/Linux/iOS 是 <scheme>://localhost/。
+// 为了统一，直接硬编码 Android/Windows 的格式（这是 Tauri 2.x 在这些平台的默认行为）。
 function buildProxyUrl(originalUrl: string, metadata?: ImageMetadata): string {
   const params = new URLSearchParams();
   params.set('url', originalUrl);
@@ -47,7 +48,23 @@ function buildProxyUrl(originalUrl: string, metadata?: ImageMetadata): string {
   if (metadata?.category) params.set('category', metadata.category);
   if (metadata?.rating != null) params.set('rating', String(metadata.rating));
 
-  return `${convertFileSrc('img', 'imgcache')}?${params.toString()}`;
+  // 在 Android/Windows 上是 http://imgcache.localhost，macOS/Linux/iOS 上是 imgcache://localhost
+  // 用 UA 或 platform 检测太脆弱；参考 convertFileSrc 的实现，更可靠的方式是检查
+  // window.location.protocol：Android 下页面本身是 http://tauri.localhost，
+  // 桌面端 macOS/Linux 是 tauri://localhost（协议名不带 http）
+  if (typeof window !== 'undefined') {
+    const pageProtocol = window.location.protocol;
+    if (pageProtocol === 'http:' || pageProtocol === 'https:') {
+      // Android / Windows: http://imgcache.localhost
+      return `http://imgcache.localhost/?${params.toString()}`;
+    } else {
+      // macOS / Linux / iOS: imgcache://localhost
+      return `imgcache://localhost/?${params.toString()}`;
+    }
+  }
+
+  // SSR fallback（实际不会走到，因为 needsProxy 在 SSR 返回 false）
+  return `http://imgcache.localhost/?${params.toString()}`;
 }
 
 /**
@@ -67,10 +84,24 @@ export function useProxyImage(
 } {
   const url = useMemo(() => {
     if (!originalUrl) return '';
+    const tauri = isTauriRuntime();
+    const proxy = needsProxy(originalUrl);
+
+    // 调试日志：release 构建也会输出到 logcat
+    console.log('[useProxyImage]', {
+      url: originalUrl.substring(0, 60),
+      tauri,
+      proxy,
+      protocol: typeof window !== 'undefined' ? window.location.protocol : 'ssr',
+    });
+
     // 纯浏览器环境没有自定义协议，直接使用原图（与旧实现的兜底一致）
-    if (!isTauriRuntime()) return originalUrl;
-    if (!needsProxy(originalUrl)) return originalUrl;
-    return buildProxyUrl(originalUrl, metadata);
+    if (!tauri) return originalUrl;
+    if (!proxy) return originalUrl;
+
+    const proxyUrl = buildProxyUrl(originalUrl, metadata);
+    console.log('[useProxyImage] built:', proxyUrl.substring(0, 80));
+    return proxyUrl;
     // metadata 在每次渲染都会重建对象，仅以 originalUrl 作为依赖（与旧实现一致）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [originalUrl]);

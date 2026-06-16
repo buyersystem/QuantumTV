@@ -1749,6 +1749,8 @@ pub async fn serve_cached_image<R: tauri::Runtime>(
 ) -> tauri::http::Response<Vec<u8>> {
     use tauri::http::StatusCode;
 
+    eprintln!("[serve_cached_image] request query: {}", &query[..query.len().min(120)]);
+
     // 解析 query 参数（form_urlencoded 自动处理百分号解码）
     let mut url = String::new();
     let mut title: Option<String> = None;
