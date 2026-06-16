@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { useEffect, useRef, useState } from 'react';
 
 export interface ImageMetadata {
   title?: string;
@@ -8,73 +9,51 @@ export interface ImageMetadata {
   rating?: number;
 }
 
-// 兼容旧导入：图片已改为通过自定义协议 imgcache:// 由 WebView 直接加载，
-// 不再有 JS 层的请求缓存需要清理。保留空实现以避免破坏现有调用方。
+// 正在进行的请求，避免重复请求
+const pendingRequests = new Map<string, Promise<Uint8Array>>();
+
 export function clearPendingRequests(): void {
-  // no-op
+  pendingRequests.clear();
 }
 
-function isTauriRuntime(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-}
-
-// 判断是否需要走代理（与历史行为保持一致）：
-// 1. doubanio.com 有防盗链，始终代理
-// 2. tauri:// 协议（macOS/Linux 桌面端）下外部图片需代理
-// 3. https 页面加载 http 图片（混合内容）需代理
-function needsProxy(originalUrl: string): boolean {
-  if (originalUrl.includes('doubanio.com')) return true;
-  if (typeof window === 'undefined') return false;
-
-  const protocol = window.location.protocol;
-  const isTauriProtocol =
-    protocol === 'tauri:' || protocol.startsWith('tauri');
-  if (isTauriProtocol) return true;
-  if (protocol === 'https:' && originalUrl.startsWith('http://')) return true;
-
-  return false;
-}
-
-// 构造自定义协议 URL。
-// Tauri 2.x 自定义协议在不同平台的默认格式：
-// - Android/Windows: https://<scheme>.localhost（启用 useHttpsScheme 后）
-// - macOS/Linux/iOS: <scheme>://localhost
-//
-// 检测方式：看页面本身的 protocol，Android 是 https://tauri.localhost（启用后）
-function buildProxyUrl(originalUrl: string, metadata?: ImageMetadata): string {
-  const params = new URLSearchParams();
-  params.set('url', originalUrl);
-  if (metadata?.title) params.set('title', metadata.title);
-  if (metadata?.source_name) params.set('source_name', metadata.source_name);
-  if (metadata?.year) params.set('year', metadata.year);
-  if (metadata?.category) params.set('category', metadata.category);
-  if (metadata?.rating != null) params.set('rating', String(metadata.rating));
-
-  if (typeof window !== 'undefined') {
-    const pageProtocol = window.location.protocol;
-    // Android/Windows 启用 useHttpsScheme 后页面是 https://tauri.localhost
-    if (pageProtocol === 'https:') {
-      return `https://imgcache.localhost/?${params.toString()}`;
-    } else if (pageProtocol === 'http:') {
-      // 旧版或未启用 https 的 Android/Windows
-      return `http://imgcache.localhost/?${params.toString()}`;
-    } else {
-      // macOS/Linux/iOS: tauri://localhost 页面，自定义协议用 imgcache://
-      return `imgcache://localhost/?${params.toString()}`;
-    }
+async function getImageData(
+  originalUrl: string,
+  metadata?: ImageMetadata,
+): Promise<Uint8Array> {
+  // 检查是否有正在进行的请求
+  const pending = pendingRequests.get(originalUrl);
+  if (pending) {
+    return pending;
   }
 
-  // SSR fallback
-  return `https://imgcache.localhost/?${params.toString()}`;
+  // 创建新请求（proxy_image 内部会自动处理 SQLite 缓存）
+  const request = (async () => {
+    try {
+      const imageData = await invoke<number[]>('proxy_image', {
+        url: originalUrl,
+        title: metadata?.title || null,
+        sourceName: metadata?.source_name || null,
+        year: metadata?.year || null,
+        category: metadata?.category || null,
+        rating: metadata?.rating || null,
+      });
+      const data = new Uint8Array(imageData);
+      pendingRequests.delete(originalUrl);
+      return data;
+    } catch (err) {
+      console.error('Failed to load image:', err);
+      pendingRequests.delete(originalUrl);
+      throw err;
+    }
+  })();
+
+  pendingRequests.set(originalUrl, request);
+  return request;
 }
 
-/**
- * 返回可直接用于 <img src> 的图片地址。
- *
- * 需要代理的图片走自定义协议 imgcache://，由 WebView 原生加载并按需重取
- * （恢复后台、blob 失效等场景均由 WebView 自行处理，前端无需重载）。
- * URL 是 originalUrl 的纯函数，因此同步计算、无 loading 态、无 IPC。
- */
+const PLACEHOLDER =
+  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"%3E%3C/svg%3E';
+
 export function useProxyImage(
   originalUrl: string,
   metadata?: ImageMetadata,
@@ -83,29 +62,116 @@ export function useProxyImage(
   isLoading: boolean;
   error: Error | null;
 } {
-  const url = useMemo(() => {
-    if (!originalUrl) return '';
-    const tauri = isTauriRuntime();
-    const proxy = needsProxy(originalUrl);
+  const [url, setUrl] = useState(PLACEHOLDER);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const [resumeKey, setResumeKey] = useState(0);
+  const blobUrlRef = useRef<string | null>(null);
 
-    // 调试日志：release 构建也会输出到 logcat
-    console.log('[useProxyImage]', {
-      url: originalUrl.substring(0, 60),
-      tauri,
-      proxy,
-      protocol: typeof window !== 'undefined' ? window.location.protocol : 'ssr',
-    });
+  useEffect(() => {
+    const handleResume = () => {
+      // 清理失效的请求缓存（防止 AppLifecycleWatcher 阈值未触发的情况）
+      clearPendingRequests();
+      setResumeKey((k) => k + 1);
+    };
+    window.addEventListener('app-resumed', handleResume);
+    return () => window.removeEventListener('app-resumed', handleResume);
+  }, []);
 
-    // 纯浏览器环境没有自定义协议，直接使用原图（与旧实现的兜底一致）
-    if (!tauri) return originalUrl;
-    if (!proxy) return originalUrl;
+  useEffect(() => {
+    if (!originalUrl) {
+      setUrl('');
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
 
-    const proxyUrl = buildProxyUrl(originalUrl, metadata);
-    console.log('[useProxyImage] built:', proxyUrl.substring(0, 80));
-    return proxyUrl;
-    // metadata 在每次渲染都会重建对象，仅以 originalUrl 作为依赖（与旧实现一致）
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [originalUrl]);
+    // 判断是否需要代理
+    // 1. doubanio.com 总是需要代理（防盗链）
+    // 2. Tauri 环境中（tauri:// 协议），所有外部图片都需要代理
+    // 3. https 页面加载 http 图片需要代理（混合内容）
+    const isTauriProtocol =
+      typeof window !== 'undefined' &&
+      (window.location.protocol === 'tauri:' ||
+        window.location.protocol.startsWith('tauri'));
 
-  return { url, isLoading: false, error: null };
+    const needsProxy =
+      originalUrl.includes('doubanio.com') ||
+      isTauriProtocol ||
+      (typeof window !== 'undefined' &&
+        window.location.protocol === 'https:' &&
+        originalUrl.startsWith('http://'));
+
+    if (!needsProxy) {
+      setUrl(originalUrl);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+
+    // 加载图片数据
+    setIsLoading(true);
+    setError(null);
+
+    let cancelled = false;
+
+    getImageData(originalUrl, metadata)
+      .then((imageData) => {
+        if (cancelled) return;
+
+        // Android WebView 某些版本对 Blob URL 支持有问题，使用 data URL
+        // 检测是否为移动端浏览器
+        const isMobile =
+          typeof window !== 'undefined' &&
+          /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+            navigator.userAgent,
+          );
+
+        if (isMobile && imageData.length < 500_000) {
+          // 使用 data URL（移动端小图片）
+          try {
+            const base64 = btoa(String.fromCharCode(...Array.from(imageData)));
+            const dataUrl = `data:image/jpeg;base64,${base64}`;
+            setUrl(dataUrl);
+            setIsLoading(false);
+          } catch (err) {
+            console.error('[useProxyImage] Failed to create data URL:', err);
+            // Fallback to blob URL
+            const blob = new Blob([imageData as any], { type: 'image/jpeg' });
+            const blobUrl = URL.createObjectURL(blob);
+            blobUrlRef.current = blobUrl;
+            setUrl(blobUrl);
+            setIsLoading(false);
+          }
+        } else {
+          // 使用 Blob URL（桌面端或大图片）
+          const blob = new Blob([imageData as any], { type: 'image/jpeg' });
+          const newBlobUrl = URL.createObjectURL(blob);
+          blobUrlRef.current = newBlobUrl;
+          setUrl(newBlobUrl);
+          setIsLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+
+        console.error('[useProxyImage] Failed to load image:', err);
+        setError(err);
+        setIsLoading(false);
+        // Fallback 到原始 URL
+        setUrl(originalUrl);
+      });
+
+    return () => {
+      cancelled = true;
+
+      // 组件卸载时释放当前实例创建的 URL
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+    };
+  }, [originalUrl, resumeKey]);
+
+  return { url, isLoading, error };
 }
