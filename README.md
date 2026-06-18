@@ -31,18 +31,12 @@
 <summary>点击展开查看界面截图</summary>
 <br>
 
-<table align="center" style="border: none; border-collapse: collapse;">
-  <tr style="border: none;">
-    <td align="center" style="border: none; width: 65%; padding: 10px;">
-      <strong>💻 桌面端</strong><br/><br/>
-      <img src="public/desktop.png" alt="Desktop Version" width="100%" style="border-radius: 6px;" />
-    </td>
-    <td align="center" style="border: none; width: 35%; padding: 10px;">
-      <strong>📱 移动端</strong><br/><br/>
-      <img src="public/android.png" alt="Android Version" width="85%" style="border-radius: 6px;" />
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <!-- 桌面端 -->
+  <img src="public/desktop.png" alt="Desktop Version" width="62%" align="middle" style="border-radius: 8px; margin-right: 3%;" />
+  <!-- 移动端 -->
+  <img src="public/android.png" alt="Android Version" width="28%" align="middle" style="border-radius: 8px;" />
+</p>
 
 </details>
 
